@@ -1,0 +1,19 @@
+{
+    "encrypt": "password",
+    "output": "output.pdf",
+    "pdfs": [
+      {
+          "file": "input.pdf",
+          "rotate": 90
+      },  {
+          "file": "input.pdf",
+          "extract": [1]
+      },  {
+          "file": "input.pdf",
+          "watermark": ["watermark.pdf", [2]]
+      },  {
+          "file": "input.pdf",
+          "redact": ["PHI"]
+      }
+    ]
+}
