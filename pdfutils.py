@@ -112,35 +112,52 @@ def redact_page(page, keywords):
     print("\tRedaction(s):", counter)
 
 
-def add_watermark(pdf, watermark_info,
-                  width_ratio=0.5, position=(0.5, 0.5)):
+def add_watermark(pdf, watermark_info):
 
     if not watermark_info:
         return
+    if len(watermark_info) == 2:
+        watermark_info.append(1)
+        watermark_info.append([0,0])
 
-    watermark_file, watermark_pages = watermark_info
+    wm_file, wm_pages, wm_ratio, [wm_off_x, wm_off_y] = watermark_info
 
     watermark_image = None
     watermark_pdf = None
-    if is_image_file(watermark_file):
+    if is_image_file(wm_file):
         # Create a watermark object from the image file
-        watermark_image = fitz.Pixmap(watermark_file)
+        watermark_image = fitz.Pixmap(wm_file)
         watermark_width = watermark_image.width
         watermark_height = watermark_image.height
-    elif is_file_type(watermark_file, ['.pdf']):
-        watermark_pdf = fitz.open(watermark_file)
+    elif is_file_type(wm_file, ['.pdf']):
+        watermark_pdf = fitz.open(wm_file)
         watermark_width, watermark_height = watermark_pdf.load_page(0).mediabox_size
     else:
         print('error: unknown type of watermark; not added')
         return
 
     # Iterate over each page of the PDF
-    for page_num in watermark_pages:
+    for page_num in wm_pages:
         page = pdf.load_page(page_num - 1)
 
-        x = 200
-        y = 660
-        watermark_rect = fitz.Rect(x, y, x+100, y+100)
+        # fix upside down watermarks
+        if not page.is_wrapped:
+            page.wrap_contents()
+
+        overflow = False
+        if wm_off_x + watermark_width * wm_ratio > page.rect.width:
+            watermark_width = page.rect.width - wm_off_x
+            overflow = True
+        if wm_off_y + watermark_height * wm_ratio > page.rect.height:
+            watermark_height = page.rect.height - wm_off_y
+            overflow = True
+
+        if overflow:
+            print("\tWatermark overflowing contents on page: {page_num}")
+
+        watermark_rect = fitz.Rect(wm_off_x, wm_off_y,
+                                   wm_off_x + watermark_width * wm_ratio,
+                                   wm_off_y + watermark_height * wm_ratio)
 
         page.show_pdf_page(watermark_rect,  # cover the full page
                            watermark_pdf,  # the PDF with the watermark
@@ -200,6 +217,7 @@ def process_entries(config_file):
         # Open the PDF file
         pdf = fitz.open(pdf_file)
 
+        redact_keywords = None
         # if this is an image file bypass most processing
         if is_image_file(pdf_file):
             pdf = convert_image_to_pdf(pdf, pdf_file)
@@ -216,10 +234,13 @@ def process_entries(config_file):
             pdf.close()
             continue
 
-        # Get the watermark
-        watermark_info = entry.get('watermark')
-        if watermark_info:
-            watermark_info[0] = get_pdf_file(config_file, watermark_info[0])
+        # Get the watermark; filename and page are mandatory
+        watermark_info = entry.get('watermark', [])
+        if watermark_info and len(watermark_info) in [2,4]:
+            watermark_info[0] = get_pdf_file(config_file,
+                                             watermark_info[0])
+        else:
+            print('Error: invalid watermark params')
 
         # Process the PDF entry
         process_pdf_entry(pdf, output_pdf,
