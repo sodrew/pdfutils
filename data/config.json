@@ -1,19 +1,22 @@
 {
-    "encrypt": "password",
-    "output": "output.pdf",
-    "pdfs": [
-      {
-          "file": "input.pdf",
-          "rotate": 90
-      },  {
-          "file": "input.pdf",
-          "extract": [1]
-      },  {
-          "file": "input.pdf",
-          "watermark": ["watermark.pdf", [2]]
-      },  {
-          "file": "input.pdf",
-          "redact": ["PHI"]
-      }
-    ]
+  "output": "merged_output.pdf",
+  "encrypt": "P4ssw0rd&",
+  "pdfs": [
+    {
+      "file": "document.pdf",
+      "rotate": 90
+    },  {
+      "file": "document.pdf",
+      "extract": [1]
+    },  {
+      "file": "document.pdf",
+      "watermark": ["watermark.pdf", [2]]
+    },  {
+      "file": "document.pdf",
+      "watermark": ["watermark.pdf", [2], 0.25, [100, 200]]
+    },  {
+      "file": "document.pdf",
+      "redact": ["PHI", "SSN", "Confidential"]
+    }
+  ]
 }

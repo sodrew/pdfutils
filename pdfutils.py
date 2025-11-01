@@ -100,10 +100,7 @@ def redact_page(page, keywords):
             annot = page.add_redact_annot(inst)
 
             # Apply the redaction by setting the overlay color
-            annot.set_colors(stroke=(0, 0, 0), fill=(0, 0, 0))
-
-            # Set the redaction appearance properties
-            annot.set_border(width=0)
+            annot.set_colors(stroke=None, fill=(0, 0, 0))
 
             # Apply the redaction to the page content
             page.apply_redactions()
@@ -236,11 +233,12 @@ def process_entries(config_file):
 
         # Get the watermark; filename and page are mandatory
         watermark_info = entry.get('watermark', [])
-        if watermark_info and len(watermark_info) in [2,4]:
-            watermark_info[0] = get_pdf_file(config_file,
+        if watermark_info and len(watermark_info) > 0:
+            if len(watermark_info) in [2,4]:
+                watermark_info[0] = get_pdf_file(config_file,
                                              watermark_info[0])
-        else:
-            print('Error: invalid watermark params')
+            else:
+                print('Error: invalid watermark params')
 
         # Process the PDF entry
         process_pdf_entry(pdf, output_pdf,
