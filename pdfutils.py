@@ -13,8 +13,6 @@ def load_config(config_file):
         print(f"Error: Invalid JSON format in configuration file '{config_file}'.")
     return None
 
-
-
 def get_pdf_file(config_file, entry_file):
     pdf_file = os.path.join(os.path.dirname(config_file), entry_file)
     if not os.path.exists(pdf_file):
@@ -91,23 +89,108 @@ def get_pages_to_extract(entry, pdf):
     return pages_to_extract
 
 
+# def tighten_rect_with_words(page, search_rect):
+#     words = page.get_text("words")  # x0, y0, x1, y1, text, block, line, word
+#     selected = []
+
+#     for w in words:
+#         w_rect = fitz.Rect(w[0], w[1], w[2], w[3])
+
+#         # vertical overlap
+#         y_overlap = min(search_rect.y1, w_rect.y1) - max(search_rect.y0, w_rect.y0)
+#         if y_overlap <= 0:
+#             continue
+#         y_ratio = y_overlap / max(1, w_rect.height)
+
+#         # horizontal overlap
+#         x_overlap = min(search_rect.x1, w_rect.x1) - max(search_rect.x0, w_rect.x0)
+#         if x_overlap <= 0:
+#             continue
+#         x_ratio = x_overlap / max(1, w_rect.width)
+
+#         # require meaningful overlap in both axes
+#         if y_ratio >= 0.5 and x_ratio >= 0.2:
+#             selected.append(w_rect)
+
+#     if not selected:
+#         return search_rect
+
+#     return fitz.Rect(
+#         min(r.x0 for r in selected),
+#         min(r.y0 for r in selected),
+#         max(r.x1 for r in selected),
+#         max(r.y1 for r in selected),
+#     )
+
+def tighten_rect_with_words(page, search_rect):
+    words = page.get_text("words")  # x0, y0, x1, y1, text, block, line, word
+    selected = []
+
+    for w in words:
+        w_rect = fitz.Rect(w[0], w[1], w[2], w[3])
+
+        # vertical overlap
+        y_overlap = min(search_rect.y1, w_rect.y1) - max(search_rect.y0, w_rect.y0)
+        if y_overlap <= 0:
+            continue
+        y_ratio = y_overlap / max(1, w_rect.height)
+
+        # horizontal overlap
+        x_overlap = min(search_rect.x1, w_rect.x1) - max(search_rect.x0, w_rect.x0)
+        if x_overlap <= 0:
+            continue
+        x_ratio = x_overlap / max(1, w_rect.width)
+
+        # keep your current logic
+        if y_ratio >= 0.5 and x_ratio >= 0.2:
+            selected.append(w_rect)
+
+    if not selected:
+        return fitz.Rect(search_rect)
+
+    return fitz.Rect(
+        search_rect.x0,                 # keep original x
+        min(r.y0 for r in selected),    # adjust y only
+        search_rect.x1,                 # keep original x
+        max(r.y1 for r in selected),
+    )
+
 def redact_page(page, keywords):
     counter = 0
+
     for keyword in keywords:
-        text_instances = page.search_for(keyword)
-        for inst in text_instances:
-            # Create a redaction annotation for each instance of the keyword
-            annot = page.add_redact_annot(inst)
+        hits = page.search_for(keyword)
 
-            # Apply the redaction by setting the overlay color
+        for hit in hits:
+            tight_rect = tighten_rect_with_words(page, hit)
+
+            # optional: slight shrink to avoid edge overlap
+            h = tight_rect.height
+            pad_y = min(max(h * 0.1, 0.3), 1.5)
+
+            tight_rect.y0 += pad_y
+            tight_rect.y1 -= pad_y
+
+            annot = page.add_redact_annot(tight_rect)
             annot.set_colors(stroke=None, fill=(0, 0, 0))
-
-            # Apply the redaction to the page content
-            page.apply_redactions()
-
             counter += 1
+
+    if counter:
+        page.apply_redactions()
+
     print("\tRedaction(s):", counter)
 
+# def redact_page(page, keywords):
+#     counter = 0
+#     for keyword in keywords:
+#         text_instances = page.search_for(keyword)
+#         for inst in text_instances:
+#             annot = page.add_redact_annot(inst)
+#             annot.set_colors(stroke=None, fill=(0, 0, 0))
+#             counter += 1
+
+#     page.apply_redactions()
+#     print("\tRedaction(s):", counter)
 
 def add_watermark(pdf, watermark_info):
 
@@ -220,10 +303,10 @@ def process_entries(config_file):
             pdf = convert_image_to_pdf(pdf, pdf_file)
         else:
             # Get the redact keywords for the current entry
-            redact_keywords = set(global_redact_keywords)
+            redact_keywords = list(global_redact_keywords)
             entry_redact_keywords = entry.get('redact')
             if entry_redact_keywords:
-                redact_keywords.update(entry_redact_keywords)
+                redact_keywords.extend(entry_redact_keywords)
 
         # Get the pages to extract
         pages_to_extract = get_pages_to_extract(entry, pdf)
